@@ -489,7 +489,7 @@ def make_image(tensor, rescale=1, rois=None, labels=None):
     image = Image.fromarray(tensor)
     if rois is not None:
         image = draw_boxes(image, rois, labels=labels)
-    image = image.resize((scaled_width, scaled_height), Image.ANTIALIAS)
+    image = image.resize((scaled_width, scaled_height), Image.Resampling.LANCZOS)
     import io
 
     output = io.BytesIO()
