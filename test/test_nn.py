@@ -6816,7 +6816,7 @@ tensor(..., device='meta', size=(1,), requires_grad=True)""")
                          F.gaussian_nll_loss(input, target, var, reduction='sum'))
         self.assertEqual(torch.mean(component_wise_loss),
                          F.gaussian_nll_loss(input, target, var, reduction='mean'))
-        with self.assertRaisesRegex(ValueError, 'is not valid'):
+        with self.assertRaisesRegex(ValueError, 'total is not a valid value for reduction'):
             F.gaussian_nll_loss(input, target, var, reduction='total')
 
     def test_gaussian_nll_loss_broadcasting(self):
@@ -6843,9 +6843,6 @@ tensor(..., device='meta', size=(1,), requires_grad=True)""")
         with self.assertRaisesRegex(ValueError, 'var is of incorrect size'):
             target = torch.randn(3, 5)
             var = torch.ones(3, 3)
-            torch.nn.functional.gaussian_nll_loss(input, target, var)
-        with self.assertRaisesRegex(ValueError, 'var has negative entry/entries'):
-            var = -1 * torch.ones(3, 5)
             torch.nn.functional.gaussian_nll_loss(input, target, var)
 
     def test_KLDivLoss_batch_mean(self):
