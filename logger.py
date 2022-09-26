@@ -22,7 +22,6 @@ from torchdynamo.optimizations import BACKENDS
 from torch._ops import OpTracker
 
 if __name__ == "__main__":
-    # r = torch._C._EnablePythonDispatcher()
     with OpTracker() as tr:
         class ToyModel(nn.Module):
             def __init__(self):
@@ -43,6 +42,7 @@ if __name__ == "__main__":
                 return self.net(x)
 
         m = ToyModel()
-        inputs = torch.randn(20, 10)
+        inputs = torch.randn(200)
+        inputs = inputs.reshape(20,10)
         m(inputs)
     print(tr.ops())

@@ -302,9 +302,7 @@ class OpOverload(PyOperatorABC):
 
     # This implements the pre-computation logic for the Python dispatcher.
     def __getattr__(self, attr):
-        OpTracker.maybe_track_op(
-            qualified_op_name=self._name, overload_name=self._overloadname
-        )
+        OpTracker.maybe_track_op(qualified_op_name=self._name)
         if len(attr) == 0 or not attr[0].isupper():
             raise AttributeError()
 
@@ -368,11 +366,13 @@ class OpTracker(BaseTorchDispatchMode):
     def __enter__(self):
         assert OpTracker._ops_tracker is None, "Only one OpTracker at a time"
         OpTracker._ops_tracker = collections.OrderedDict()
+        self._py_dispatcher = torch._C._EnablePythonDispatcher()
         return super().__enter__()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.tracked_ops = list(OpTracker._ops_tracker.keys())
         OpTracker._ops_tracker = None
+        del self._py_dispatcher
         super().__exit__(exc_type, exc_val, exc_tb)
 
     def __torch_dispatch__(self, func, types, args=(), kwargs=None):
@@ -380,24 +380,19 @@ class OpTracker(BaseTorchDispatchMode):
         return super().__torch_dispatch__(func, types, args=args, kwargs=kwargs)
 
     @classmethod
-    def maybe_track_op(
-        cls, *, qualified_op_name=None, overload_name=None, torchdispatch_name=None
-    ):
+    def maybe_track_op(cls, *, qualified_op_name=None, torchdispatch_name=None):
         """
         Tries to make leaving this hooked up to OpOverloadPacket.__getattr__ not impact perf when not actively tracking
         """
         if cls._ops_tracker is not None:
-            print(
-                "maybe_track_ops", qualified_op_name, overload_name, torchdispatch_name
-            )
+            msg = "Provide exactly one of qualified_op_name and torchdispatch_name"
             if torchdispatch_name:
-                assert not qualified_op_name and not overload_name
-                cls._ops_tracker[str(torchdispatch_name)] = None
-            elif qualified_op_name:
-                assert overload_name and not torchdispatch_name
-                cls._ops_tracker[
-                    f"{qualified_op_name.replace('::', '.')}.{overload_name}"
-                ] = None
+                assert not qualified_op_name, msg
+                key = str(torchdispatch_name)
+            else:
+                assert qualified_op_name, msg
+                key = f"{qualified_op_name.replace('::', '.')}"
+            cls._ops_tracker[key] = None
 
     def ops(self):
         """
@@ -442,9 +437,6 @@ class OpOverloadPacket:
         return self._op
 
     def __getattr__(self, key):
-        OpTracker.maybe_track_op(
-            qualified_op_name=self._qualified_op_name, overload_name=key
-        )
         # It is not a valid op_name when __file__ is passed in
         if key == "__file__":
             return "torch.ops"
