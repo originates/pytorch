@@ -8461,6 +8461,86 @@ class TestAutogradDeviceType(TestCase):
         with self.assertWarnsRegex(UserWarning, "Warn from backward"):
             b.backward()
 
+class TestAllowMutationOnSaved(TestCase):
+    def tearDown(self):
+        torch.autograd.graph._cloned = dict()
+        torch.autograd.graph._use_counts = dict()
+        torch.autograd.graph._create_graph = False
+
+    def test_basic(self):
+        a = torch.rand(2, 3, requires_grad=True)
+
+        def fn(a):
+            b = a.clone()
+            out = (b**2).sum()
+            b.sin_()
+            out.sum().backward()
+            return a.grad
+        msg = "variables needed for gradient computation has been modified by an inplace"
+        with self.assertRaisesRegex(RuntimeError, msg):
+            fn(a)
+
+        with torch.autograd.graph.allow_mutation_on_saved_tensors():
+            da = fn(a)
+
+        self.assertTrue(torch.allclose(a * 2, da))
+        self.assertEqual(len(list(torch.autograd.graph._cloned.items())), 0)
+
+    def test_views(self):
+        a = torch.rand(2, 3, requires_grad=True)
+
+        def fn(a):
+            b = a.clone()
+            c = b.view_as(b)
+            out = (b**2).sum()  # How does this work?
+            c.sin_()
+            out.sum().backward()
+            return a.grad
+
+        msg = "variables needed for gradient computation has been modified by an inplace"
+        with self.assertRaisesRegex(RuntimeError, msg):
+            fn(a)
+
+        with torch.autograd.graph.allow_mutation_on_saved_tensors():
+            da = fn(a)
+
+        self.assertEqual(len(torch.autograd.graph._cloned.items()), 0)
+        self.assertTrue(torch.allclose(a * 2, da))
+
+    def test_save_both_view_and_base(self):
+        a = torch.rand(2, 3, requires_grad=True)
+
+        def fn(a):
+            b = a.clone()
+            c = b[:1]
+            out = (b**2)
+            c**2
+            c.sin_()
+            out.sum().backward()
+            return a.grad
+
+        msg = "variables needed for gradient computation has been modified by an inplace"
+        with self.assertRaisesRegex(RuntimeError, msg):
+            fn(a)
+
+        with torch.autograd.graph.allow_mutation_on_saved_tensors():
+            da = fn(a)
+
+        self.assertEqual(len(list(torch.autograd.graph._cloned.items())), 0)
+        self.assertTrue(torch.allclose(a * 2, da))
+
+    def test_double_backward(self):
+        with torch.autograd.graph.allow_mutation_on_saved_tensors():
+            a = torch.rand(2, 3, requires_grad=True)
+            b = a.clone()
+            out = (b**2).sum()
+            b.sin_()
+            torch.autograd.grad(out, a, create_graph=True)
+            da, = torch.autograd.grad(out, a, create_graph=True)
+            d2a, = torch.autograd.grad(da.sum(), a)
+
+        self.assertTrue(torch.allclose(torch.ones_like(a) * 2, d2a))
+        self.assertEqual(len(torch.autograd.graph._cloned.items()), 0)
 
 class TestAutogradInferenceMode(TestCase):
     def _is_inference_tensor(self, tensor):
