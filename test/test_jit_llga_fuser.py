@@ -1,4 +1,5 @@
 # Owner(s): ["module: mkldnn"]
+import sys
 import torch
 import unittest
 import itertools
@@ -15,6 +16,15 @@ from torch.testing._internal.common_device_type import (
 )
 LLGA_FUSION_GROUP = 'prim::oneDNNFusionGroup'
 LLGA_NOT_ENABLED = not torch._C.has_mkldnn or IS_WINDOWS or IS_MACOS
+
+def is_avx512_supported():
+    if sys.platform != 'linux':
+        return False
+    with open("/proc/cpuinfo", encoding="ascii") as f:
+        lines = f.read()
+    return "avx512" in lines
+
+IS_AVX512_SUPPORTED = is_avx512_supported()
 
 def warmup_forward(f, *args, profiling_count=2):
     for i in range(profiling_count):
@@ -112,7 +122,7 @@ def get_eltwise_fn(name):
     else:
         raise NameError('Eltwise function %s not found' % name)
 
-
+@unittest.skipIf(not IS_AVX512_SUPPORTED, "This test fails for BF16 on machines without AVX512.")
 @unittest.skipIf(LLGA_NOT_ENABLED, "MKL-DNN build is disabled")
 class TestOp(JitLlgaTestCase):
     @onlyCPU
@@ -358,6 +368,7 @@ class TestOp(JitLlgaTestCase):
         self.assertEqual(m(x), traced(x))
 
 
+@unittest.skipIf(not IS_AVX512_SUPPORTED, "This test fails for BF16 on machines without AVX512.")
 @unittest.skipIf(LLGA_NOT_ENABLED, "MKL-DNN build is disabled")
 class TestFusionPattern(JitLlgaTestCase):
     @onlyCPU
@@ -728,6 +739,7 @@ class TestEnableDisableLlgaFuser(JitTestCase):
         self.assertGraphContainsExactly(t_jit_3.graph_for(x, y), LLGA_FUSION_GROUP, 0)
 
 
+@unittest.skipIf(not IS_AVX512_SUPPORTED, "This test fails for BF16 on machines without AVX512.")
 @unittest.skipIf(LLGA_NOT_ENABLED, "MKL-DNN build is disabled")
 class TestModel(JitLlgaTestCase):
     @skipIfNoTorchVision
