@@ -26,7 +26,7 @@ from common_utils import (
     skip,
     skipOps,
     tol1,
-    # tol2,
+    tol2,
     opsToleranceOverride,
     check_vmap_fallback,
     is_batch_norm_training,
@@ -360,6 +360,8 @@ class TestOperators(TestCase):
              {torch.float32: tol(atol=1e-04, rtol=1.3e-06)}, device_type='cuda'),
         tol1('nn.functional.binary_cross_entropy_with_logits',
              {torch.float32: tol(atol=4e-04, rtol=4e-04)}),
+        tol1('nn.functional.batch_norm',
+             {torch.float32: tol(atol=4e-05, rtol=5e-05)}),
     ))
     def test_jvp(self, device, dtype, op):
         # TODO: get rid of vjp_decomp when we add decomposition support to
@@ -602,11 +604,11 @@ class TestOperators(TestCase):
     @toleranceOverride({torch.float32: tol(atol=1e-04, rtol=1e-04)})
     @opsToleranceOverride('TestOperators', 'test_vmapvjpvjp', (
         tol1('linalg.svd',
-             {torch.float32: tol(atol=5e-04, rtol=5e-04)}),
+             {torch.float32: tol(atol=1e-03, rtol=5e-04)}),
         tol1('linalg.lu_factor',
              {torch.float32: tol(atol=2e-03, rtol=2e-02)}),
         tol1('svd',
-             {torch.float32: tol(atol=5e-04, rtol=5e-04)}),
+             {torch.float32: tol(atol=1e-03, rtol=5e-04)}),
     ))
     def test_vmapvjpvjp(self, device, dtype, op):
         # Since, we test `vjpvjp` independently,
@@ -1147,6 +1149,10 @@ class TestOperators(TestCase):
     @opsToleranceOverride('TestOperators', 'test_jvpvjp', (
         tol1('_masked.prod',
              {torch.float32: tol(atol=1e-04, rtol=1.3e-05)}),
+        tol1('nn.functional.group_norm',
+             {torch.float32: tol(atol=1e-03, rtol=1e-03)}),
+        tol2('linalg.pinv', 'hermitian',
+             {torch.float32: tol(atol=5e-03, rtol=5e-03)}),
     ))
     def test_jvpvjp(self, device, dtype, op):
         if not op.supports_autograd:
@@ -1297,6 +1303,8 @@ class TestOperators(TestCase):
         tol1('linalg.householder_product',
              {torch.float32: tol(atol=5e-04, rtol=5e-04)}),
         tol1('linalg.multi_dot',
+             {torch.float32: tol(atol=5e-04, rtol=5e-04)}),
+        tol2('linalg.pinv', 'hermitian',
              {torch.float32: tol(atol=5e-04, rtol=5e-04)}),
         tol1('svd',
              {torch.float32: tol(atol=5e-04, rtol=5e-04)}),
@@ -1531,6 +1539,8 @@ class TestOperators(TestCase):
              {torch.float32: tol(atol=5e-04, rtol=9e-03)}, device_type='cuda'),
         tol1('linalg.householder_product',
              {torch.float32: tol(atol=1e-04, rtol=1e-04)}, device_type='cpu'),
+        tol1('linalg.pinv', 'hermitian'
+             {torch.float32: tol(atol=5e-06, rtol=5e-06)}),
     ))
     def test_vmap_autograd_grad(self, device, dtype, op):
         def is_differentiable(inp):

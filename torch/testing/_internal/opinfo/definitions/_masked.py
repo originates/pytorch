@@ -438,12 +438,12 @@ op_db: List[OpInfo] = [
         ),
         decorators=[
             DecorateInfo(
-                toleranceOverride({torch.bfloat16: tol(atol=1e-03, rtol=1e-03)}),
-                "TestReductions",
-                "test_reference_masked",
-            ),
-            DecorateInfo(
-                toleranceOverride({torch.float16: tol(atol=1e-03, rtol=1e-03)}),
+                toleranceOverride(
+                    {
+                        torch.bfloat16: tol(atol=1e-03, rtol=5e-2),
+                        torch.float16: tol(atol=1e-03, rtol=5e-3),
+                    }
+                ),
                 "TestReductions",
                 "test_reference_masked",
             ),
@@ -451,6 +451,16 @@ op_db: List[OpInfo] = [
                 toleranceOverride({torch.float16: tol(atol=1e-02, rtol=1e-03)}),
                 "TestReductions",
                 "test_ref_small_input",
+            ),
+            DecorateInfo(
+                toleranceOverride(
+                    {
+                        torch.bfloat16: tol(atol=0.1, rtol=0.1),
+                        torch.float16: tol(atol=5e-3, rtol=5e-3),
+                    }
+                ),
+                "TestMasked",
+                "test_mask_layout",
             ),
         ],
         sample_inputs_func=sample_inputs_masked_reduction,
@@ -510,6 +520,11 @@ op_db: List[OpInfo] = [
                 toleranceOverride({torch.float16: tol(atol=1e-03, rtol=1e-03)}),
                 "TestReductions",
                 "test_ref_duplicate_values",
+            ),
+            DecorateInfo(
+                toleranceOverride({torch.float16: tol(atol=1e-03, rtol=1e-03)}),
+                "TestReductions",
+                "test_ref_small_input",
             ),
         ],
         sample_inputs_func=sample_inputs_masked_reduction,
@@ -767,9 +782,19 @@ op_db: List[OpInfo] = [
         ),
         decorators=[
             DecorateInfo(
-                toleranceOverride({torch.float16: tol(atol=1e-03, rtol=1e-03)}),
+                toleranceOverride(
+                    {
+                        torch.bfloat16: tol(atol=1e-03, rtol=0.05),
+                        torch.float16: tol(atol=1e-03, rtol=1e-03),
+                    }
+                ),
                 "TestReductions",
                 "test_reference_masked",
+            ),
+            DecorateInfo(
+                toleranceOverride({torch.float16: tol(atol=1e-03, rtol=1e-03)}),
+                "TestReductions",
+                "test_ref_small_input",
             ),
         ],
         sample_inputs_func=sample_inputs_masked_reduction,
@@ -892,6 +917,16 @@ op_db: List[OpInfo] = [
                 "TestCudaFuserOpInfo",
                 "test_nvfuser_correctness",
             ),
+            DecorateInfo(
+                toleranceOverride(
+                    {
+                        torch.float16: tol(atol=1e-02, rtol=1e-02),
+                        torch.bfloat16: tol(atol=1e-03, rtol=1e-03),
+                    }
+                ),
+                "TestMasked",
+                "test_reference_masked",
+            ),
         ],
         sample_inputs_func=sample_inputs_masked_std_var,
         gradcheck_wrapper=gradcheck_wrapper_masked_operation,
@@ -945,7 +980,12 @@ op_db: List[OpInfo] = [
         ),
         decorators=[
             DecorateInfo(
-                toleranceOverride({torch.float16: tol(atol=1e-02, rtol=1e-02)}),
+                toleranceOverride(
+                    {
+                        torch.bfloat16: tol(atol=1e-02, rtol=1e-02),
+                        torch.float16: tol(atol=1e-02, rtol=1e-02),
+                    }
+                ),
                 "TestReductions",
                 "test_reference_masked",
             ),
@@ -955,7 +995,12 @@ op_db: List[OpInfo] = [
                 "test_ref_small_input",
             ),
             DecorateInfo(
-                toleranceOverride({torch.float16: tol(atol=1e-02, rtol=1e-02)}),
+                toleranceOverride(
+                    {
+                        torch.float16: tol(atol=1e-02, rtol=1e-02),
+                        torch.bfloat16: tol(atol=5e-03, rtol=5e-04),
+                    }
+                ),
                 "TestMasked",
                 "test_reference_masked",
             ),
