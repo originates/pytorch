@@ -1,3 +1,4 @@
+#include <aten/src/ATen/core/jit_type.h>
 #include <torch/csrc/jit/codegen/onednn/prepare_binary.h>
 #include <torch/csrc/jit/passes/dead_code_elimination.h>
 #include <torch/csrc/jit/passes/shape_analysis.h>
@@ -20,16 +21,35 @@ void mayConvertScalarInputToTensor(Node* node) {
   if (node->input(0)->type()->isSubtypeOf(TensorType::get()) &&
       (node->input(1)->type()->isSubtypeOf(FloatType::get()) ||
        node->input(1)->type()->isSubtypeOf(IntType::get()))) {
+    auto dtypeOfFirstInput =
+        node->input(0)->type()->cast<TensorType>()->scalarType().value();
+    // If a scalar is added to be a tensor, we would assume that the
+    // scalar is of the same dtype as the tensor, as oneDNN graph
+    // currently requires inputs of binary ops to have the same dtype.
+    // We create a 1D tensor from the scalar input & "promote" its
+    // dtype to that of the first input. Doing so helps us satisfy PyTorch's
+    // type promotion rules.
+    // Although we convert the scalar to a tensor, we still need to promote
+    // types, as if the second input were still a scalar.
+    // The following sample code-snippet illustrates that converting a scalar
+    // input to a 1-D tensor may result in a different output dtype than would
+    // otherwise have been the case.
+    // clang-format off
+    //   >>> (1. + torch.rand([2]).half()).dtype
+    //       torch.float16
+    //   >>> (torch.tensor(1.).unsqueeze(0) + (torch.rand([2]).half())).dtype
+    //       torch.float32
+    // clang-format on
+    auto promotedDtype = dtypeOfFirstInput;
     auto scalar = node->input(1);
     WithInsertPoint guard(node);
     auto g = node->owningGraph();
     // 42 : Scalar  -->  tensor(42.0) : Float([])
-    auto t = g->insert(
-        aten::as_tensor, {scalar}, {{"dtype", at::ScalarType::Float}});
+    auto t = g->insert(aten::as_tensor, {scalar}, {{"dtype", promotedDtype}});
     // add dim & stride info to IR
     c10::optional<size_t> t_dim = 1;
     auto target_type = TensorTypePtr(
-        TensorType::create(at::ScalarType::Float, at::kCPU, t_dim, false));
+        TensorType::create(promotedDtype, at::kCPU, t_dim, false));
     target_type = target_type->withSizes({1});
     t->setType(target_type);
 
@@ -37,6 +57,11 @@ void mayConvertScalarInputToTensor(Node* node) {
     auto unsqueezed = g->insert(aten::unsqueeze, {t, 0});
     unsqueezed->setType(target_type);
     node->replaceInput(1, unsqueezed);
+
+    // dtype might have changed, so needs to be updated in IR as well
+    node->output()->setType(
+        node->output()->type()->expect<TensorType>()->withScalarType(
+            promotedDtype));
   }
 }
 
@@ -46,13 +71,18 @@ static void ConvertScalarToTensor(Block* block) {
       ConvertScalarToTensor(sub);
     }
 
-    if (node->kind() == aten::add || node->kind() == aten::mul) {
+    if (node->kind() == aten::add || node->kind() == aten::mul ||
+        node->kind() == aten::div) {
       mayConvertScalarInputToTensor(node);
     }
   }
 }
 
 void mayDecomposeAdd(Node* node) {
+  if (node->inputs().size() < 3) {
+    return; // corner-case in BERT-mrpc that's not in line with
+            // native_functions.yaml
+  }
   if (toIValue(node->namedInput("alpha")).has_value()) {
     auto alphaEqualsOne = compareConstValue(node->namedInput("alpha"), 1.0);
     if (!alphaEqualsOne) {
@@ -60,6 +90,10 @@ void mayDecomposeAdd(Node* node) {
       auto g = node->owningGraph();
       auto mul = g->insert(
           aten::mul, {node->namedInput("other"), node->namedInput("alpha")});
+      if (node->namedInput("other")->type()->isSubtypeOf(TensorType::get())) {
+        auto mulTensorTypePtr = node->namedInput("other")->type();
+        mul->setType(mulTensorTypePtr);
+      }
       node->replaceInput(1, mul);
       auto one = g->insertConstant(1.0);
       node->replaceInput(2, one);
