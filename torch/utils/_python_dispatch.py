@@ -178,3 +178,8 @@ class BaseTorchDispatchMode(TorchDispatchMode):
         if kwargs is None:
             kwargs = {}
         return func(*args, **kwargs)
+
+class TorchDispatchLogger(BaseTorchDispatchMode):
+    def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+        print(f"TorchDispatchLogger {func}")
+        return super().__torch_dispatch__(func, types, args=args, kwargs=kwargs)
